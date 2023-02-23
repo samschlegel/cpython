@@ -982,9 +982,38 @@ def _find_and_load_unlocked(name, import_):
 
 _NEEDS_LOADING = object()
 
+_IMPORT_GRAPH = []
+
+def import_graph():
+    return _IMPORT_GRAPH
+
+_IMPORTLIB_FILENAMES = ("<frozen importlib._bootstrap>", "<frozen importlib._bootstrap_external>")
+_IMPORTLIB_FILENAME_SUFFIXES = ("importlib/__init__.py", "pkgutil.py")
+
+def _update_import_graph(name):
+    f = sys._getframe()
+    filename = None
+    lineno = None
+    while True:
+        if f is None: break
+
+        co = f.f_code
+        if co is None: break
+        if co.co_filename not in _IMPORTLIB_FILENAMES \
+            and not co.co_filename.endswith("Lib/importlib/__init__.py") \
+            and not co.co_filename.endswith("Lib/pkgutil.py"):
+            filename = co.co_filename
+            lineno = f.f_lineno
+            break
+
+        f = f.f_back
+
+    _IMPORT_GRAPH.append((filename, lineno, name))
 
 def _find_and_load(name, import_):
     """Find and load the module."""
+    _call_with_frames_removed(_update_import_graph, name)
+
     with _ModuleLockManager(name):
         module = sys.modules.get(name, _NEEDS_LOADING)
         if module is _NEEDS_LOADING:
